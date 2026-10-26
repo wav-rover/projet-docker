@@ -4,6 +4,12 @@ framework:
 
     # Note that the session will be started ONLY if you read or write from it.
     session: true
+    http_client:
+        scoped_clients:
+            auth.client:
+                base_uri: '%env(AUTH_API_URL)%'
+            chalet.client:
+                base_uri: '%env(CHALET_API_URL)%'
 
     #esi: true
     #fragments: true
@@ -11,5 +17,7 @@ framework:
 when@test:
     framework:
         test: true
+        http_client:
+            mock_response_factory: App\Tests\MockApiResponses
         session:
             storage_factory_id: session.storage.factory.mock_file

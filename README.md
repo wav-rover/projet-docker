@@ -14,7 +14,7 @@ Application de location de chalets en micro-services (projet « Dév avec Docker
 
 ```bash
 cd frontend && npm run dev                                 # http://localhost:3000
-cd services/chalet && PORT=3001 npm run dev               # http://localhost:3001
+cd services/chalet && npm run dev                          # http://localhost:3001 (copier .env.example en .env)
 cd services/auth && symfony serve --port=8001
 cd services/booking && symfony serve --port=8002
 ```
