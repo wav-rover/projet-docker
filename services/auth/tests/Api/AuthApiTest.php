@@ -101,6 +101,29 @@ final class AuthApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(204);
     }
 
+    public function testStandardUserCannotListUsers(): void
+    {
+        $this->createUser('user@test.fr');
+        $token = $this->login('user@test.fr');
+
+        $this->client->request('GET', '/users', server: ['HTTP_AUTHORIZATION' => "Bearer $token"]);
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
+    public function testAdminCanListUsers(): void
+    {
+        $this->createUser('admin@test.fr', ['ROLE_ADMIN']);
+        $this->createUser('user@test.fr');
+        $token = $this->login('admin@test.fr');
+
+        $this->client->request('GET', '/users', server: ['HTTP_AUTHORIZATION' => "Bearer $token"]);
+
+        self::assertResponseIsSuccessful();
+        $emails = array_column(json_decode($this->client->getResponse()->getContent(), true), 'email');
+        self::assertSame(['admin@test.fr', 'user@test.fr'], $emails);
+    }
+
     private function createUser(string $email, array $roles = []): User
     {
         $container = static::getContainer();
