@@ -119,6 +119,38 @@ final class BookingApiTest extends WebTestCase
         self::assertCount(0, $this->request('GET', '/bookings', 'user-token'));
     }
 
+    public function testUserCanDeleteOwnBookings(): void
+    {
+        $this->request('POST', '/bookings', 'user-token', $this->stay());
+
+        $this->request('DELETE', '/users/1/bookings', 'user-token');
+        self::assertResponseStatusCodeSame(204);
+
+        self::assertCount(0, $this->request('GET', '/bookings', 'user-token'));
+    }
+
+    public function testUserCannotDeleteSomeoneElsesBookings(): void
+    {
+        $this->request('POST', '/bookings', 'user-token', $this->stay());
+
+        $this->request('DELETE', '/users/1/bookings', 'other-token');
+        self::assertResponseStatusCodeSame(403);
+
+        self::assertCount(1, $this->request('GET', '/bookings', 'user-token'));
+    }
+
+    public function testAdminDeletesOnlyTheTargetUserBookings(): void
+    {
+        $this->request('POST', '/bookings', 'user-token', $this->stay(startInDays: 10));
+        $this->request('POST', '/bookings', 'other-token', $this->stay(startInDays: 20));
+
+        $this->request('DELETE', '/users/1/bookings', 'admin-token');
+        self::assertResponseStatusCodeSame(204);
+
+        self::assertCount(0, $this->request('GET', '/bookings', 'user-token'));
+        self::assertCount(1, $this->request('GET', '/bookings', 'other-token'));
+    }
+
     private function stay(int $startInDays = 10, int $nights = 3): array
     {
         $startDate = new \DateTimeImmutable("+$startInDays days");

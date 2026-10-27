@@ -4,6 +4,10 @@ framework:
 
     # Note that the session will be started ONLY if you read or write from it.
     session: true
+    http_client:
+        scoped_clients:
+            booking.client:
+                base_uri: '%env(BOOKING_API_URL)%'
 
     #esi: true
     #fragments: true
@@ -11,5 +15,7 @@ framework:
 when@test:
     framework:
         test: true
+        http_client:
+            mock_response_factory: App\Tests\MockBookingResponses
         session:
             storage_factory_id: session.storage.factory.mock_file

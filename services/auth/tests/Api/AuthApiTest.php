@@ -3,6 +3,7 @@
 namespace App\Tests\Api;
 
 use App\Entity\User;
+use App\Tests\MockBookingResponses;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -15,6 +16,7 @@ final class AuthApiTest extends WebTestCase
     protected function setUp(): void
     {
         $this->client = static::createClient();
+        MockBookingResponses::reset();
     }
 
     public function testRegisterCreatesAccount(): void
@@ -122,6 +124,42 @@ final class AuthApiTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $emails = array_column(json_decode($this->client->getResponse()->getContent(), true), 'email');
         self::assertSame(['admin@test.fr', 'user@test.fr'], $emails);
+    }
+
+    public function testDeletingOwnAccountAlsoDeletesBookings(): void
+    {
+        $user = $this->createUser('user@test.fr');
+        $token = $this->login('user@test.fr');
+
+        $this->client->request('DELETE', '/me', server: ['HTTP_AUTHORIZATION' => "Bearer $token"]);
+
+        self::assertResponseStatusCodeSame(204);
+        self::assertSame(["DELETE /users/{$user->getId()}/bookings"], MockBookingResponses::$requests);
+    }
+
+    public function testAccountIsKeptWhenBookingServiceIsDown(): void
+    {
+        $this->createUser('user@test.fr');
+        $token = $this->login('user@test.fr');
+        MockBookingResponses::$isAvailable = false;
+
+        $this->client->request('DELETE', '/me', server: ['HTTP_AUTHORIZATION' => "Bearer $token"]);
+        self::assertResponseStatusCodeSame(503);
+
+        $this->client->request('GET', '/me', server: ['HTTP_AUTHORIZATION' => "Bearer $token"]);
+        self::assertResponseIsSuccessful();
+    }
+
+    public function testAdminDeletingUserAlsoDeletesBookings(): void
+    {
+        $this->createUser('admin@test.fr', ['ROLE_ADMIN']);
+        $target = $this->createUser('target@test.fr');
+        $token = $this->login('admin@test.fr');
+
+        $this->client->request('DELETE', "/users/{$target->getId()}", server: ['HTTP_AUTHORIZATION' => "Bearer $token"]);
+
+        self::assertResponseStatusCodeSame(204);
+        self::assertSame(["DELETE /users/{$target->getId()}/bookings"], MockBookingResponses::$requests);
     }
 
     private function createUser(string $email, array $roles = []): User

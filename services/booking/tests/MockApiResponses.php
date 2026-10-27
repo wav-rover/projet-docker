@@ -13,6 +13,7 @@ final class MockApiResponses
     public const USERS = [
         'user-token' => ['id' => 1, 'email' => 'user@test.fr', 'roles' => ['ROLE_USER']],
         'other-token' => ['id' => 2, 'email' => 'other@test.fr', 'roles' => ['ROLE_USER']],
+        'admin-token' => ['id' => 3, 'email' => 'admin@test.fr', 'roles' => ['ROLE_ADMIN', 'ROLE_USER']],
     ];
 
     public const CHALETS = [

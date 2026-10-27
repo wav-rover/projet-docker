@@ -30,4 +30,14 @@ class BookingRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult() > 0;
     }
+
+    public function deleteByUserId(int $userId): void
+    {
+        $this->createQueryBuilder('booking')
+            ->delete()
+            ->where('booking.userId = :userId')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->execute();
+    }
 }
