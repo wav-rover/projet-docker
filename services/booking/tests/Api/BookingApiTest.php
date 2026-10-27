@@ -109,6 +109,15 @@ final class BookingApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    public function testPayOrCancelUnknownBookingReturns404(): void
+    {
+        $this->request('POST', '/bookings/999/pay', 'user-token');
+        self::assertResponseStatusCodeSame(404);
+
+        $this->request('DELETE', '/bookings/999', 'user-token');
+        self::assertResponseStatusCodeSame(404);
+    }
+
     public function testCancelsBooking(): void
     {
         $booking = $this->request('POST', '/bookings', 'user-token', $this->stay());

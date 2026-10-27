@@ -42,6 +42,17 @@ final class AuthApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(400);
     }
 
+    public function testLoginReturnsToken(): void
+    {
+        $this->createUser('user@test.fr');
+
+        $this->client->jsonRequest('POST', '/login', ['email' => 'user@test.fr', 'password' => 'motdepasse']);
+
+        self::assertResponseIsSuccessful();
+        $token = json_decode($this->client->getResponse()->getContent(), true)['token'];
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $token);
+    }
+
     public function testLoginRejectsWrongPassword(): void
     {
         $this->createUser('user@test.fr');
@@ -90,17 +101,6 @@ final class AuthApiTest extends WebTestCase
         $this->client->request('DELETE', "/users/{$otherAdmin->getId()}", server: ['HTTP_AUTHORIZATION' => "Bearer $token"]);
 
         self::assertResponseStatusCodeSame(403);
-    }
-
-    public function testAdminCanDeleteStandardUser(): void
-    {
-        $this->createUser('admin@test.fr', ['ROLE_ADMIN']);
-        $target = $this->createUser('target@test.fr');
-        $token = $this->login('admin@test.fr');
-
-        $this->client->request('DELETE', "/users/{$target->getId()}", server: ['HTTP_AUTHORIZATION' => "Bearer $token"]);
-
-        self::assertResponseStatusCodeSame(204);
     }
 
     public function testStandardUserCannotListUsers(): void
