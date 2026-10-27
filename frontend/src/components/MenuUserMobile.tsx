@@ -10,7 +10,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -28,9 +27,12 @@ export default function MenuUserMobile({ email, links }: MenuUserMobileProps) {
           <MenuIcon aria-hidden />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-48">
+          <DropdownMenuItem render={<Link href="/account" />} className="flex-col items-start gap-0">
+            <span className="max-w-full truncate">{email}</span>
+            <span className="text-xs text-muted-foreground">Mon compte</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuLabel className="truncate">{email}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
             {links.map(({ href, label }) => (
               <DropdownMenuItem key={href} render={<Link href={href} />}>
                 {label}

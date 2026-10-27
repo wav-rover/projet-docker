@@ -1,3 +1,4 @@
+import { UserRoundIcon } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import MenuUserMobile from '@/components/MenuUserMobile';
@@ -48,7 +49,14 @@ const HeaderUser = async () => {
             {label}
           </Link>
         ))}
-        <span className="hidden text-sm text-muted-foreground lg:inline">{user.email}</span>
+        <Link
+          href="/account"
+          title="Mon compte"
+          className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'max-w-56 text-muted-foreground' })}
+        >
+          <UserRoundIcon aria-hidden />
+          <span className="truncate">{user.email}</span>
+        </Link>
         <form action={logout}>
           <Button type="submit" variant="outline" size="sm">
             Déconnexion
@@ -64,5 +72,4 @@ const getNavLinks = (isAdminUser: boolean): NavLink[] => [
   { href: '/chalets', label: 'Chalets' },
   { href: '/bookings', label: 'Mes réservations' },
   ...(isAdminUser ? [{ href: '/admin', label: 'Admin' }] : []),
-  { href: '/account', label: 'Mon compte' },
 ];
