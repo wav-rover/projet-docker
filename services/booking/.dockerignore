@@ -1,0 +1,13 @@
+vendor
+var
+.env.local
+.env.local.php
+.env.*.local
+tests
+phpunit.dist.xml
+bin/phpunit
+.phpunit.cache
+AGENTS.md
+.editorconfig
+Dockerfile
+.dockerignore

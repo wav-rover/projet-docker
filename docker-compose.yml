@@ -1,0 +1,118 @@
+services:
+  frontend:
+    build: ./frontend
+    image: ${REGISTRY:-chalets}/frontend:${TAG:-dev}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:3000"
+    environment:
+      AUTH_API_URL: http://auth:8080
+      CHALET_API_URL: http://chalet:3000
+      BOOKING_API_URL: http://booking:8080
+    networks:
+      - public
+      - backend
+    depends_on:
+      auth:
+        condition: service_healthy
+      chalet:
+        condition: service_healthy
+      booking:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  auth:
+    build: ./services/auth
+    image: ${REGISTRY:-chalets}/auth:${TAG:-dev}
+    restart: unless-stopped
+    environment:
+      APP_SECRET: ${AUTH_APP_SECRET:?AUTH_APP_SECRET manquant}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/auth?serverVersion=18&charset=utf8
+      BOOKING_API_URL: http://booking:8080
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  chalet:
+    build: ./services/chalet
+    image: ${REGISTRY:-chalets}/chalet:${TAG:-dev}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/chalet
+      AUTH_API_URL: http://auth:8080
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  booking:
+    build: ./services/booking
+    image: ${REGISTRY:-chalets}/booking:${TAG:-dev}
+    restart: unless-stopped
+    environment:
+      APP_SECRET: ${BOOKING_APP_SECRET:?BOOKING_APP_SECRET manquant}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/booking?serverVersion=18&charset=utf8
+      AUTH_API_URL: http://auth:8080
+      CHALET_API_URL: http://chalet:3000
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      chalet:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER manquant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}
+      POSTGRES_DB: auth
+    volumes:
+      - db-data:/var/lib/postgresql
+      - ./init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d auth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+networks:
+  public:
+  backend:
+    internal: true
+
+volumes:
+  db-data:
