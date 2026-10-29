@@ -9,9 +9,14 @@ export type Chalet = {
   capacity: number;
 };
 
-const chaletFetch = async (path: string) =>
+export const chaletFetch = async (path: string, init?: RequestInit) =>
   fetch(`${process.env.CHALET_API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${await getSessionToken()}` },
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${await getSessionToken()}`,
+      ...init?.headers,
+    },
   });
 
 export const getChalets = async (): Promise<Chalet[]> => {

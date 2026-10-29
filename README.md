@@ -38,6 +38,8 @@ docker compose exec auth php bin/console app:create-admin admin@chalets.ch motde
 
 Les comptes standard se créent depuis le site, avec le bouton « Créer un compte ».
 
+Le catalogue contient déjà 6 chalets : le service `chalet` les insère au premier lancement, quand la table est vide. Un compte standard peut réserver un chalet, payer (paiement simulé) ou annuler ses réservations, et supprimer son compte. L'administrateur a en plus la page « Admin », où il ajoute ou supprime des chalets du catalogue, et où il peut supprimer un compte standard avec ses réservations.
+
 > Le port se change avec `FRONTEND_PORT` dans `.env`.
 
 > **Fichiers** `.env` **:** avec Docker, seul le `.env` de la racine (étape 1) est nécessaire. Les `.env` des services servent aux tests lancés sur la machine : voir la section Tests.
@@ -62,7 +64,18 @@ docker compose -f docker-compose.yml --env-file .env.prod up -d --wait
 
 `-f docker-compose.yml` évite de charger `docker-compose.override.yml`, qui n'existe que sur la machine de développement.
 
-`REGISTRY` et `TAG` choisissent l'image à déployer, par exemple `ghcr.io/<compte>/<dépôt>` et le SHA du commit.
+`REGISTRY` et `TAG` choisissent l'image à déployer, par exemple `ghcr.io/<compte>/<dépôt>` et le SHA du commit. Les images se construisent et se poussent dans le registre avec les mêmes variables :
+
+```bash
+docker compose -f docker-compose.yml --env-file .env.prod build
+docker compose -f docker-compose.yml --env-file .env.prod push
+```
+
+Le compte administrateur se crée de la même façon qu'en local, une fois par environnement :
+
+```bash
+docker compose -f docker-compose.yml --env-file .env.prod exec auth php bin/console app:create-admin <email> <mot-de-passe>
+```
 
 ## Tests
 
@@ -85,13 +98,11 @@ cp services/chalet/.env.example services/chalet/.env
 
 **3. Installer les dépendances** : `composer install` dans `services/auth` et `services/booking`, `npm install` dans `services/chalet`.
 
-**4. Créer les bases de test et appliquer les migrations.** PHPUnit ajoute `_test` au nom de la base :
+**4. Créer les bases de test et appliquer les migrations.** En `--env=test`, Doctrine ajoute `_test` au nom de la base (`auth_test`, `booking_test`). Depuis la racine :
 
 ```bash
-docker compose exec db psql -U chalets -d auth -c "CREATE DATABASE auth_test;"
-docker compose exec db psql -U chalets -d auth -c "CREATE DATABASE booking_test;"
-cd services/auth && php bin/console doctrine:migrations:migrate --env=test --no-interaction
-cd services/booking && php bin/console doctrine:migrations:migrate --env=test --no-interaction
+(cd services/auth && php bin/console doctrine:database:create --env=test && php bin/console doctrine:migrations:migrate --env=test --no-interaction)
+(cd services/booking && php bin/console doctrine:database:create --env=test && php bin/console doctrine:migrations:migrate --env=test --no-interaction)
 ```
 
 **5. Lancer les tests :**

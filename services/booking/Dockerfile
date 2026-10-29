@@ -18,7 +18,10 @@ COPY composer.json composer.lock symfony.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
 
 COPY . .
-RUN composer dump-autoload --classmap-authoritative --no-dev \
+# .env is not versioned: .env.example gives the defaults, docker compose overrides them at runtime
+RUN cp .env.example .env \
+    && composer dump-autoload --classmap-authoritative --no-dev \
+    && composer dump-env prod \
     && composer run-script --no-dev post-install-cmd
 
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
