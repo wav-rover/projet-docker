@@ -16,7 +16,7 @@ Seul `frontend` est joignable depuis l'hôte. Les backends et la base sont sur u
 
 Prérequis : [Docker](https://docs.docker.com/get-docker/) avec Docker Compose v2.
 
-**1. Créer le fichier `.env`** à partir du modèle, avec des secrets aléatoires :
+**1. Créer le fichier** `.env` à partir du modèle, avec des secrets aléatoires :
 
 ```bash
 cp .env.example .env && for key in POSTGRES_PASSWORD AUTH_APP_SECRET BOOKING_APP_SECRET; do perl -pi -e "s/^$key=.*/$key=$(openssl rand -hex 16)/" .env; done
@@ -25,7 +25,7 @@ cp .env.example .env && for key in POSTGRES_PASSWORD AUTH_APP_SECRET BOOKING_APP
 **2. Construire et lancer l'application** (environ 2 minutes au premier lancement) :
 
 ```bash
-docker compose up -d --build --wait
+docker compose up -d --build
 ```
 
 **3. Créer un compte administrateur :**
@@ -40,7 +40,7 @@ Les comptes standard se créent depuis le site, avec le bouton « Créer un comp
 
 > Le port se change avec `FRONTEND_PORT` dans `.env`.
 
-> **Fichiers `.env` :** avec Docker, seul le `.env` de la racine (étape 1) est nécessaire. Les fichiers `.env` présents dans les services ne servent qu'au développement local, il n'y a rien à y modifier.
+> **Fichiers** `.env` **:** avec Docker, seul le `.env` de la racine (étape 1) est nécessaire. Les `.env` des services servent aux tests lancés sur la machine : voir la section Tests.
 
 ## Commandes utiles
 
@@ -70,4 +70,12 @@ docker compose --env-file .env.prod up -d --wait
 | booking | `cd services/booking && php bin/phpunit` |
 | chalet | `cd services/chalet && npm test` |
 
-Les tests Symfony utilisent une base PostgreSQL locale (port 5433, bases `*_test`) : le conteneur `chalets-db` doit être démarré.
+Avant de lancer les tests sur la machine, copier le `.env.example` de chaque service en `.env`, puis remplacer `change-me` dans `DATABASE_URL` par `POSTGRES_PASSWORD` du `.env` à la racine. L'utilisateur est déjà `chalets`, l'hôte `127.0.0.1`, le port `5433`. Seul le nom de la base change : `auth`, `booking`, `chalet`.
+
+```bash
+cp services/auth/.env.example services/auth/.env
+cp services/booking/.env.example services/booking/.env
+cp services/chalet/.env.example services/chalet/.env
+```
+
+PHPUnit ajoute `_test` au nom de la base (`auth_test`, `booking_test`). Le service `db` doit être démarré et joignable sur le port `5433`.
