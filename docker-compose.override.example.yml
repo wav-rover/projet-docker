@@ -1,0 +1,14 @@
+# Copier ce fichier en docker-compose.override.yml (non versionné).
+# Docker Compose le charge automatiquement en local.
+# Le réseau backend est interne, donc le port publié a besoin d'un second réseau.
+# 127.0.0.1 limite l'accès à la machine, pour les tests PHPUnit.
+services:
+  db:
+    ports:
+      - "127.0.0.1:5433:5432"
+    networks:
+      - backend
+      - local
+
+networks:
+  local:

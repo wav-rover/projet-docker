@@ -57,20 +57,25 @@ Les comptes standard se créent depuis le site, avec le bouton « Créer un comp
 Le même `docker-compose.yml` sert partout : seul le fichier de variables change. Créer un fichier par environnement à partir de `.env.example` (`.env.test`, `.env.uat`, `.env.prod`, jamais commités), puis :
 
 ```bash
-docker compose --env-file .env.prod up -d --wait
+docker compose -f docker-compose.yml --env-file .env.prod up -d --wait
 ```
+
+`-f docker-compose.yml` évite de charger `docker-compose.override.yml`, qui n'existe que sur la machine de développement.
 
 `REGISTRY` et `TAG` choisissent l'image à déployer, par exemple `ghcr.io/<compte>/<dépôt>` et le SHA du commit.
 
 ## Tests
 
-| Service | Commande |
-|---|---|
-| auth | `cd services/auth && php bin/phpunit` |
-| booking | `cd services/booking && php bin/phpunit` |
-| chalet | `cd services/chalet && npm test` |
+Les tests PHPUnit se lancent sur la machine. Postgres doit être joignable sur `127.0.0.1:5433`.
 
-Avant de lancer les tests sur la machine, copier le `.env.example` de chaque service en `.env`, puis remplacer `change-me` dans `DATABASE_URL` par `POSTGRES_PASSWORD` du `.env` à la racine. L'utilisateur est déjà `chalets`, l'hôte `127.0.0.1`, le port `5433`. Seul le nom de la base change : `auth`, `booking`, `chalet`.
+**1. Publier Postgres en local.** Ce fichier n'est pas versionné, et le port n'écoute que sur la machine :
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+docker compose up -d db
+```
+
+**2. Créer les** `.env` **des services** à partir des modèles, puis remplacer `change-me` dans `DATABASE_URL` par `POSTGRES_PASSWORD` du `.env` à la racine. L'utilisateur est déjà `chalets`, l'hôte `127.0.0.1`, le port `5433`. Seul le nom de la base change : `auth`, `booking`, `chalet`.
 
 ```bash
 cp services/auth/.env.example services/auth/.env
@@ -78,4 +83,21 @@ cp services/booking/.env.example services/booking/.env
 cp services/chalet/.env.example services/chalet/.env
 ```
 
-PHPUnit ajoute `_test` au nom de la base (`auth_test`, `booking_test`). Le service `db` doit être démarré et joignable sur le port `5433`.
+**3. Installer les dépendances** : `composer install` dans `services/auth` et `services/booking`, `npm install` dans `services/chalet`.
+
+**4. Créer les bases de test et appliquer les migrations.** PHPUnit ajoute `_test` au nom de la base :
+
+```bash
+docker compose exec db psql -U chalets -d auth -c "CREATE DATABASE auth_test;"
+docker compose exec db psql -U chalets -d auth -c "CREATE DATABASE booking_test;"
+cd services/auth && php bin/console doctrine:migrations:migrate --env=test --no-interaction
+cd services/booking && php bin/console doctrine:migrations:migrate --env=test --no-interaction
+```
+
+**5. Lancer les tests :**
+
+| Service | Commande |
+|---|---|
+| auth | `cd services/auth && php bin/phpunit` |
+| booking | `cd services/booking && php bin/phpunit` |
+| chalet | `cd services/chalet && npm test` |
