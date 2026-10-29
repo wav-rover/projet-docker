@@ -11,15 +11,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-symfony:
-    name: Tests ${{ matrix.service }} (PHPUnit)
+  test-auth:
+    name: Tests auth (PHPUnit)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [auth, booking]
     defaults:
       run:
-        working-directory: services/${{ matrix.service }}
+        working-directory: services/auth
     services:
       postgres:
         image: postgres:18-alpine
@@ -34,7 +31,54 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://chalets:chalets@127.0.0.1:5432/${{ matrix.service }}?serverVersion=18&charset=utf8
+      DATABASE_URL: postgresql://chalets:chalets@127.0.0.1:5432/auth?serverVersion=18&charset=utf8
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          extensions: pdo_pgsql
+          coverage: none
+
+      - name: Create .env from the template
+        run: cp .env.example .env
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Audit dependencies
+        run: composer audit
+
+      - name: Prepare test database
+        run: |
+          php bin/console doctrine:database:create --env=test --if-not-exists
+          php bin/console doctrine:migrations:migrate --env=test --no-interaction
+
+      - name: Run tests
+        run: php bin/phpunit
+
+  test-booking:
+    name: Tests booking (PHPUnit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/booking
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: chalets
+          POSTGRES_PASSWORD: chalets
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chalets"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://chalets:chalets@127.0.0.1:5432/booking?serverVersion=18&charset=utf8
     steps:
       - uses: actions/checkout@v5
 
@@ -115,27 +159,21 @@ jobs:
       - name: Type-check and build
         run: npm run build
 
-  docker:
-    name: Image ${{ matrix.service }}
-    needs: [test-symfony, test-chalet, test-frontend]
+
+  image-auth:
+    name: Image auth
+    needs: test-auth
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      # Each microservice image is independent: one failure must not cancel the others
-      fail-fast: false
-      matrix:
-        service: [frontend, auth, booking, chalet]
     env:
-      IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.service }}
-      # The frontend lives at the root, the backends under services/
-      CONTEXT: ${{ matrix.service == 'frontend' && 'frontend' || format('services/{0}', matrix.service) }}
+      IMAGE: ghcr.io/${{ github.repository }}/auth
     steps:
       - uses: actions/checkout@v5
 
       - name: Lint Dockerfile (hadolint)
-        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < "$CONTEXT/Dockerfile"
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < services/auth/Dockerfile
 
       - uses: docker/setup-buildx-action@v3
 
@@ -151,7 +189,172 @@ jobs:
       - name: Build image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ env.CONTEXT }}
+          context: services/auth
+          pull: true
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Scan image (Trivy)
+        run: >-
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.58.1 image --debug
+          --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
+          ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: github.event_name == 'push'
+        run: docker push --all-tags "$IMAGE"
+
+  image-booking:
+    name: Image booking
+    needs: test-booking
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/booking
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lint Dockerfile (hadolint)
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < services/booking/Dockerfile
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=ref,event=tag
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: services/booking
+          pull: true
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Scan image (Trivy)
+        run: >-
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.58.1 image --debug
+          --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
+          ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: github.event_name == 'push'
+        run: docker push --all-tags "$IMAGE"
+
+  image-chalet:
+    name: Image chalet
+    needs: test-chalet
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/chalet
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lint Dockerfile (hadolint)
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < services/chalet/Dockerfile
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=ref,event=tag
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: services/chalet
+          pull: true
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Scan image (Trivy)
+        run: >-
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.58.1 image --debug
+          --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
+          ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: github.event_name == 'push'
+        run: docker push --all-tags "$IMAGE"
+
+  image-frontend:
+    name: Image frontend
+    needs: test-frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lint Dockerfile (hadolint)
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < frontend/Dockerfile
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=ref,event=tag
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
           pull: true
           load: true
           tags: ${{ steps.meta.outputs.tags }}
