@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-symfony:
+    name: Tests ${{ matrix.service }} (PHPUnit)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth, booking]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: chalets
+          POSTGRES_PASSWORD: chalets
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chalets"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://chalets:chalets@127.0.0.1:5432/${{ matrix.service }}?serverVersion=18&charset=utf8
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          extensions: pdo_pgsql
+          coverage: none
+
+      - name: Create .env from the template
+        run: cp .env.example .env
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Audit dependencies
+        run: composer audit
+
+      - name: Prepare test database
+        run: |
+          php bin/console doctrine:database:create --env=test --if-not-exists
+          php bin/console doctrine:migrations:migrate --env=test --no-interaction
+
+      - name: Run tests
+        run: php bin/phpunit
+
+  test-chalet:
+    name: Tests chalet (Vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/chalet
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: services/chalet/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Type-check and compile
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+  test-frontend:
+    name: Lint and build frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check and build
+        run: npm run build
+
+  docker:
+    name: Image ${{ matrix.service }}
+    needs: [test-symfony, test-chalet, test-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: frontend
+            context: frontend
+          - service: auth
+            context: services/auth
+          - service: booking
+            context: services/booking
+          - service: chalet
+            context: services/chalet
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lint Dockerfile (hadolint)
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < ${{ matrix.context }}/Dockerfile
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=ref,event=tag
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          pull: true
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Scan image (Trivy)
+        run: >-
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.58.1 image
+          --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
+          ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: github.event_name == 'push'
+        run: docker push --all-tags "$IMAGE"
