@@ -123,6 +123,8 @@ jobs:
       contents: read
       packages: write
     strategy:
+      # Each microservice image is independent: one failure must not cancel the others
+      fail-fast: false
       matrix:
         include:
           - service: frontend
@@ -165,7 +167,7 @@ jobs:
         run: >-
           docker run --rm
           -v /var/run/docker.sock:/var/run/docker.sock
-          aquasec/trivy:0.58.1 image
+          aquasec/trivy:0.58.1 image --debug
           --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
           ${{ env.IMAGE }}:${{ github.sha }}
 
