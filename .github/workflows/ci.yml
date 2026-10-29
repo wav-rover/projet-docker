@@ -2,13 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
+    branches: ["**"]
+    tags: ["**"]
   pull_request:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   test-auth:
@@ -199,7 +195,7 @@ jobs:
         run: >-
           docker run --rm
           -v /var/run/docker.sock:/var/run/docker.sock
-          aquasec/trivy:0.58.1 image --debug
+          aquasec/trivy:0.58.1 image
           --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
           ${{ env.IMAGE }}:${{ github.sha }}
 
@@ -254,7 +250,7 @@ jobs:
         run: >-
           docker run --rm
           -v /var/run/docker.sock:/var/run/docker.sock
-          aquasec/trivy:0.58.1 image --debug
+          aquasec/trivy:0.58.1 image
           --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
           ${{ env.IMAGE }}:${{ github.sha }}
 
@@ -309,7 +305,7 @@ jobs:
         run: >-
           docker run --rm
           -v /var/run/docker.sock:/var/run/docker.sock
-          aquasec/trivy:0.58.1 image --debug
+          aquasec/trivy:0.58.1 image
           --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
           ${{ env.IMAGE }}:${{ github.sha }}
 
@@ -364,7 +360,7 @@ jobs:
         run: >-
           docker run --rm
           -v /var/run/docker.sock:/var/run/docker.sock
-          aquasec/trivy:0.58.1 image --debug
+          aquasec/trivy:0.58.1 image
           --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1
           ${{ env.IMAGE }}:${{ github.sha }}
 
