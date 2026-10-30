@@ -129,7 +129,9 @@ TypeScript, le compilateur et les outils de test ne sont donc pas dans l'image f
   Pour faire ce choix, j'ai demandé à l'IA quelle était la meilleure image de base pour une application Symfony. Elle m'a orienté vers FrankenPHP, qui est l'image utilisée par le modèle officiel « Symfony Docker ». En comparant avec l'image PHP officielle, j'ai vu que sa variante `php:8.5-fpm` n'exécute que le PHP : il m'aurait fallu un conteneur de plus, comme Nginx, pour servir le HTTP. Avec FrankenPHP, ce n'est pas nécessaire. Un seul conteneur par backend suffit, ce qui respecte la règle « un conteneur = un processus » et simplifie le `docker-compose.yml`.
 
   L'image existe aussi en variante Alpine et se configure par variables d'environnement (`SERVER_NAME=:8080`). Ses fonctions avancées (worker mode, HTTPS automatique, HTTP/3) ne sont pas utilisées : le service est sur un réseau interne, derrière le frontend.
-- `install-php-extensions pdo_pgsql` et le `php.ini` de production.
+- **Extension PostgreSQL et configuration PHP de production**, dans un seul `RUN` pour ne créer qu'une couche :
+  - `install-php-extensions pdo_pgsql` : PHP ne sait pas parler à PostgreSQL par défaut. `pdo_pgsql` est le pilote qu'utilise Doctrine pour se connecter à la base. `install-php-extensions` est un utilitaire fourni par l'image, qui installe l'extension et ses dépendances système en une commande.
+  - `cp php.ini-production php.ini` : l'image n'active aucun `php.ini` par défaut, mais en fournit deux modèles, développement et production. Le modèle de production n'affiche pas les erreurs aux visiteurs (elles partent dans les logs) et active des réglages de performance et de sécurité adaptés à un serveur.
 - `composer install --no-dev`, autoloader optimisé.
 - **Durcissement** : `setcap -r` retire à FrankenPHP la capability qui permet d'écouter sur les ports < 1024. Le service écoute sur 8080 et tourne en `www-data`.
 - **Script d'entrée** (`docker-entrypoint.sh`) : il applique les migrations Doctrine avant de lancer le serveur. La base est donc toujours à jour au démarrage.
